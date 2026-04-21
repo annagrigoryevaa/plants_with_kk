@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plant Keeper</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div>
+          <p class="eyebrow">Plant Keeper</p>
+          <h1>Справочник растений</h1>
+          <p class="muted">
+            Каталог коллекции, фотопленка роста и календарь ухода в одном месте.
+          </p>
+        </div>
+
+        <div class="profile-card">
+          <div>
+            <p class="caption">Пользователь</p>
+            <strong id="profileName">Подключение...</strong>
+            <p class="muted" id="profileEmail"></p>
+          </div>
+          <button id="logoutButton" class="ghost">Выйти</button>
+        </div>
+
+        <section class="card">
+          <div class="section-title">
+            <h2>Добавить растение</h2>
+          </div>
+          <form id="plantForm" class="stack">
+            <input name="name" placeholder="Название" required />
+            <input name="species" placeholder="Вид / сорт" />
+            <input name="room" placeholder="Комната / локация" />
+            <textarea name="notes" placeholder="Заметки"></textarea>
+            <button type="submit">Сохранить растение</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <div class="section-title">
+            <h2>Добавить событие</h2>
+          </div>
+          <form id="eventForm" class="stack">
+            <input name="title" placeholder="Название события" />
+            <input name="date" type="date" required />
+            <label>
+              Действия
+              <select name="actions" multiple size="3">
+                <option value="полив">Полив</option>
+                <option value="пересадка">Пересадка</option>
+                <option value="подкормка">Подкормка</option>
+              </select>
+            </label>
+            <label>
+              Растения
+              <select name="plantIds" id="eventPlantsSelect" multiple size="6"></select>
+            </label>
+            <textarea name="notes" placeholder="Комментарий"></textarea>
+            <button type="submit">Сохранить событие</button>
+          </form>
+        </section>
+      </aside>
+
+      <main class="content">
+        <section class="hero card">
+          <div>
+            <p class="eyebrow">Живая коллекция</p>
+            <h2>Следите за ростом по фотографиям и уходу по календарю</h2>
+          </div>
+          <div class="hero-stats">
+            <div>
+              <span id="plantsCount">0</span>
+              <p>растений</p>
+            </div>
+            <div>
+              <span id="photosCount">0</span>
+              <p>фото</p>
+            </div>
+            <div>
+              <span id="eventsCount">0</span>
+              <p>событий</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="layout-grid">
+          <section class="card">
+            <div class="section-title">
+              <h2>Коллекция</h2>
+            </div>
+            <div id="plantsGrid" class="plants-grid"></div>
+          </section>
+
+          <section class="card">
+            <div class="section-title">
+              <h2>Календарь ухода</h2>
+              <div class="month-switcher">
+                <button id="prevMonth" class="ghost">←</button>
+                <strong id="monthLabel"></strong>
+                <button id="nextMonth" class="ghost">→</button>
+              </div>
+            </div>
+            <div id="calendarGrid" class="calendar-grid"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <template id="plantCardTemplate">
+      <article class="plant-card">
+        <div class="plant-card-top">
+          <div>
+            <h3 class="plant-name"></h3>
+            <p class="muted plant-species"></p>
+          </div>
+          <button class="ghost danger delete-plant">Удалить</button>
+        </div>
+        <p class="plant-room"></p>
+        <p class="muted plant-notes"></p>
+        <form class="photo-form stack">
+          <input name="photo" type="file" accept="image/*" required />
+          <input name="capturedAt" type="datetime-local" />
+          <input name="note" placeholder="Комментарий к фото" />
+          <button type="submit">Добавить фото в пленку</button>
+        </form>
+        <div class="photo-strip"></div>
+      </article>
+    </template>
+
+    <script src="/app-config.js"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
