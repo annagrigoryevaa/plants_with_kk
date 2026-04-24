@@ -1,0 +1,14 @@
+2026/04/22 14:56:38 plant tracker listening on :8080
+2026/04/22 14:56:39 GET /api/health (0s)
+2026/04/22 14:56:51 GET /api/health (0s)
+2026/04/22 14:57:42 GET / (152.3794ms)
+2026/04/22 14:57:42 GET /styles.css (548µs)
+2026/04/22 14:57:42 GET /app.js (0s)
+2026/04/22 14:57:42 GET /app-config.js (0s)
+2026/04/22 14:57:42 GET /api/dashboard (0s)
+2026/04/22 14:58:41 GET / (868.1µs)
+2026/04/22 14:58:41 GET /app-config.js (0s)
+2026/04/22 14:58:41 GET /favicon.ico (505.1µs)
+2026/04/22 14:58:41 GET /api/me (71.1763ms)
+2026/04/22 14:58:41 GET /api/dashboard (0s)
+exit status 0xc000013a
