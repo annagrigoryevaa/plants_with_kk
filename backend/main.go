@@ -25,11 +25,14 @@ import (
 )
 
 type Config struct {
-	Port              string
-	DataDir           string
-	AppBaseURL        string
-	KeycloakIssuerURL string
-	KeycloakClientID  string
+	Port               string
+	DataDir            string
+	AppBaseURL         string
+	AuthMode           string
+	KeycloakIssuerURL  string
+	KeycloakClientID   string
+	OAuth2ProxySignIn  string
+	OAuth2ProxySignOut string
 }
 
 type App struct {
@@ -152,7 +155,10 @@ func main() {
 		log.Fatalf("store init failed: %v", err)
 	}
 
-	validator := NewTokenValidator(cfg.KeycloakIssuerURL, cfg.KeycloakClientID)
+	var validator *TokenValidator
+	if cfg.AuthMode == "jwt" {
+		validator = NewTokenValidator(cfg.KeycloakIssuerURL, cfg.KeycloakClientID)
+	}
 	app := &App{
 		cfg:          cfg,
 		store:        store,
@@ -169,15 +175,22 @@ func main() {
 
 func mustLoadConfig() Config {
 	cfg := Config{
-		Port:              valueOrDefault("PORT", "8080"),
-		DataDir:           valueOrDefault("DATA_DIR", "./data"),
-		AppBaseURL:        valueOrDefault("APP_BASE_URL", "http://localhost:8080"),
-		KeycloakIssuerURL: os.Getenv("KEYCLOAK_ISSUER_URL"),
-		KeycloakClientID:  os.Getenv("KEYCLOAK_CLIENT_ID"),
+		Port:               valueOrDefault("PORT", "8080"),
+		DataDir:            valueOrDefault("DATA_DIR", "./data"),
+		AppBaseURL:         valueOrDefault("APP_BASE_URL", "http://localhost:8080"),
+		AuthMode:           valueOrDefault("AUTH_MODE", "oauth2-proxy"),
+		KeycloakIssuerURL:  os.Getenv("KEYCLOAK_ISSUER_URL"),
+		KeycloakClientID:   os.Getenv("KEYCLOAK_CLIENT_ID"),
+		OAuth2ProxySignIn:  valueOrDefault("OAUTH2_PROXY_SIGN_IN_URL", "/oauth2/sign_in"),
+		OAuth2ProxySignOut: valueOrDefault("OAUTH2_PROXY_SIGN_OUT_URL", "/oauth2/sign_out"),
 	}
 
-	if cfg.KeycloakIssuerURL == "" || cfg.KeycloakClientID == "" {
-		log.Fatal("KEYCLOAK_ISSUER_URL and KEYCLOAK_CLIENT_ID are required")
+	if cfg.AuthMode != "oauth2-proxy" && cfg.AuthMode != "jwt" {
+		log.Fatal("AUTH_MODE must be either oauth2-proxy or jwt")
+	}
+
+	if cfg.AuthMode == "jwt" && (cfg.KeycloakIssuerURL == "" || cfg.KeycloakClientID == "") {
+		log.Fatal("KEYCLOAK_ISSUER_URL and KEYCLOAK_CLIENT_ID are required when AUTH_MODE=jwt")
 	}
 
 	return cfg
@@ -617,6 +630,18 @@ func (a *App) withLogging(next http.Handler) http.Handler {
 
 func (a *App) withAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if a.cfg.AuthMode == "oauth2-proxy" {
+			user, ok := userFromProxyHeaders(r)
+			if !ok {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing oauth2-proxy identity headers"})
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), userContextKey{}, user)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
 		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if token == "" || token == r.Header.Get("Authorization") {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
@@ -643,11 +668,49 @@ func (a *App) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (a *App) handleAppConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	fmt.Fprintf(w, "window.APP_CONFIG = %s;", mustJSON(map[string]string{
-		"apiBaseUrl":          a.cfg.AppBaseURL,
-		"keycloakIssuerUrl":   a.cfg.KeycloakIssuerURL,
-		"keycloakClientId":    a.cfg.KeycloakClientID,
-		"keycloakRedirectUri": a.cfg.AppBaseURL,
+		"apiBaseUrl":            a.cfg.AppBaseURL,
+		"authMode":              a.cfg.AuthMode,
+		"keycloakIssuerUrl":     a.cfg.KeycloakIssuerURL,
+		"keycloakClientId":      a.cfg.KeycloakClientID,
+		"keycloakRedirectUri":   a.cfg.AppBaseURL,
+		"oauth2ProxySignInUrl":  a.cfg.OAuth2ProxySignIn,
+		"oauth2ProxySignOutUrl": a.cfg.OAuth2ProxySignOut,
 	}))
+}
+
+func userFromProxyHeaders(r *http.Request) (UserInfo, bool) {
+	username := firstNonEmptyHeader(r,
+		"X-Forwarded-Preferred-Username",
+		"X-Forwarded-User",
+		"X-Auth-Request-Preferred-Username",
+		"X-Auth-Request-User",
+	)
+	if username == "" {
+		return UserInfo{}, false
+	}
+
+	email := firstNonEmptyHeader(r, "X-Forwarded-Email", "X-Auth-Request-Email")
+	name := firstNonEmptyHeader(r,
+		"X-Forwarded-Preferred-Username",
+		"X-Forwarded-User",
+		"X-Auth-Request-Preferred-Username",
+		"X-Auth-Request-User",
+	)
+
+	return UserInfo{
+		Username: username,
+		Email:    email,
+		Name:     name,
+	}, true
+}
+
+func firstNonEmptyHeader(r *http.Request, names ...string) string {
+	for _, name := range names {
+		if value := strings.TrimSpace(r.Header.Get(name)); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func (a *App) handleMe(w http.ResponseWriter, r *http.Request) {

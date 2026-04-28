@@ -57,6 +57,17 @@ function bindEvents() {
 }
 
 async function ensureAuthenticated() {
+  if (config.authMode === "oauth2-proxy") {
+    state.user = await api("/api/me");
+    if (!state.user) {
+      window.location.assign(config.oauth2ProxySignInUrl || "/oauth2/sign_in");
+      return;
+    }
+    profileName.textContent = state.user.name || state.user.username;
+    profileEmail.textContent = state.user.email || "";
+    return;
+  }
+
   const code = new URLSearchParams(window.location.search).get("code");
   if (code) {
     await exchangeCodeForTokens(code);
@@ -164,6 +175,11 @@ function clearSession() {
 }
 
 async function logout() {
+  if (config.authMode === "oauth2-proxy") {
+    window.location.assign(config.oauth2ProxySignOutUrl || "/oauth2/sign_out");
+    return;
+  }
+
   clearSession();
   window.location.assign(
     `${config.keycloakIssuerUrl}/protocol/openid-connect/logout?post_logout_redirect_uri=${encodeURIComponent(config.keycloakRedirectUri)}`
@@ -345,16 +361,21 @@ async function deletePlant(plantId) {
 }
 
 async function api(path, options = {}) {
-  if (state.refreshToken && Date.now() >= state.tokenExpiry - 15_000) {
+  if (config.authMode === "jwt" && state.refreshToken && Date.now() >= state.tokenExpiry - 15_000) {
     await refreshSession();
   }
 
-  const headers = options.isMultipart
-    ? { Authorization: `Bearer ${state.accessToken}` }
-    : {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${state.accessToken}`,
-      };
+  const headers =
+    config.authMode === "oauth2-proxy"
+      ? options.isMultipart
+        ? {}
+        : { "Content-Type": "application/json" }
+      : options.isMultipart
+        ? { Authorization: `Bearer ${state.accessToken}` }
+        : {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${state.accessToken}`,
+          };
 
   const response = await fetch(path, {
     ...options,
@@ -365,6 +386,11 @@ async function api(path, options = {}) {
   });
 
   if (response.status === 401) {
+    if (config.authMode === "oauth2-proxy") {
+      window.location.assign(config.oauth2ProxySignInUrl || "/oauth2/sign_in");
+      return null;
+    }
+
     clearSession();
     await startLogin();
     return null;
