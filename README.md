@@ -67,6 +67,9 @@ docker compose up --build -d
 
 - [docker-compose.keycloak.yml](./docker-compose.keycloak.yml): отдельный Keycloak и PostgreSQL
 - [docker-compose.yml](./docker-compose.yml): backend и `oauth2-proxy`
+- [oauth2-proxy/oauth2-proxy.cfg](./oauth2-proxy/oauth2-proxy.cfg): конфиг `oauth2-proxy` с комментариями по каждой настройке
+- [keycloak/themes/plantkeeper/login/theme.properties](./keycloak/themes/plantkeeper/login/theme.properties): тема авторизации Keycloak
+- [keycloak/themes/plantkeeper/login/resources/css/styles.css](./keycloak/themes/plantkeeper/login/resources/css/styles.css): кастомный стиль экрана логина
 
 ## Основные переменные
 
