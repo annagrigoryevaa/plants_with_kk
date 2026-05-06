@@ -8,8 +8,7 @@ provider "keycloak" {
 
 locals {
   redirect_uris = [
-    "${var.frontend_base_url}",
-    "${var.frontend_base_url}/*",
+    "${var.frontend_base_url}/oauth2/callback",
   ]
 }
 
@@ -19,18 +18,20 @@ resource "keycloak_realm" "plants" {
   display_name = "Plants"
 }
 
-resource "keycloak_openid_client" "plant_keeper_web" {
+resource "keycloak_openid_client" "plant_keeper_proxy" {
   realm_id                     = keycloak_realm.plants.id
-  client_id                    = "plant-keeper-web"
-  name                         = "Plant Keeper Web"
+  client_id                    = var.oauth2_proxy_client_id
+  name                         = "Plant Keeper OAuth2 Proxy"
   enabled                      = true
-  access_type                  = "PUBLIC"
+  access_type                  = "CONFIDENTIAL"
+  client_secret                = var.oauth2_proxy_client_secret
   standard_flow_enabled        = true
   implicit_flow_enabled        = false
   direct_access_grants_enabled = false
   service_accounts_enabled     = false
   valid_redirect_uris          = local.redirect_uris
-  web_origins                  = [var.frontend_base_url, "+"]
+  web_origins                  = [var.frontend_base_url]
+  base_url                     = var.frontend_base_url
 }
 
 resource "keycloak_role" "app_user" {

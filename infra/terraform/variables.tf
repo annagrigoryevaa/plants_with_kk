@@ -25,3 +25,16 @@ variable "frontend_base_url" {
   description = "Base URL where the web app is served."
   default     = "http://localhost:8080"
 }
+
+variable "oauth2_proxy_client_id" {
+  type        = string
+  description = "Client ID used by oauth2-proxy."
+  default     = "plant-keeper-proxy"
+}
+
+variable "oauth2_proxy_client_secret" {
+  type        = string
+  description = "Client secret used by oauth2-proxy."
+  sensitive   = true
+  default     = "dev-oauth2-proxy-secret"
+}

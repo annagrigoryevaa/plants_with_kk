@@ -1,32 +1,32 @@
 services:
-  postgres:
-    image: postgres:16
-    container_name: plant-keeper-postgres
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: plant-keeper-backend
     environment:
-      POSTGRES_DB: keycloak
-      POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: keycloak
-    ports:
-      - "5433:5432"
+      PORT: "8080"
+      DATA_DIR: /data
+      APP_BASE_URL: http://localhost:8080
+      AUTH_MODE: oauth2-proxy
+      OAUTH2_PROXY_SIGN_IN_URL: /oauth2/sign_in
+      OAUTH2_PROXY_SIGN_OUT_URL: /oauth2/sign_out?rd=%2F
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - backend_data:/data
 
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.1
-    container_name: plant-keeper-keycloak
-    command: start-dev
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.12.0
+    container_name: plant-keeper-oauth2-proxy
     depends_on:
-      - postgres
-    environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: keycloak
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
-      KC_HTTP_PORT: 8080
+      - backend
+    command:
+      - --config=/etc/oauth2-proxy.cfg
+    extra_hosts:
+      - host.docker.internal:host-gateway
     ports:
-      - "8081:8080"
+      - "8080:4180"
+    volumes:
+      - ./oauth2-proxy/oauth2-proxy.cfg:/etc/oauth2-proxy.cfg:ro
 
 volumes:
-  postgres_data:
+  backend_data:

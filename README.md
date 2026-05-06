@@ -1,91 +1,98 @@
 # Plant Keeper
 
-Полноценный стартовый проект для ведения домашней коллекции растений:
+Локальный учебный проект для учета домашних растений:
 
-- Go-бекенд с REST API, хранением каталога и загрузкой фотографий
-- фронтенд без сборщика, который работает как SPA
-- фотопленка по каждому растению для отслеживания роста
-- календарь ухода с мультивыбором действий: `полив`, `пересадка`, `подкормка`
-- привязка календарных событий к нескольким растениям
-- обязательная авторизация через Keycloak по OIDC Authorization Code + PKCE
-- Terraform-конфиг для управления Keycloak realm и клиентом
+- Go backend с REST API и файловым хранением данных
+- frontend без сборщика, который backend отдает как статику
+- отдельный Keycloak для OIDC
+- `oauth2-proxy` как sidecar перед приложением
+- Terraform для настройки realm и OIDC-клиента в Keycloak
 
-## Структура
+## Архитектура
 
-- [backend/main.go](/Users/annagrigoreva/Documents/Codex/2026-04-17-go-terraform/backend/main.go)
-- [frontend/public/index.html](/Users/annagrigoreva/Documents/Codex/2026-04-17-go-terraform/frontend/public/index.html)
-- [infra/terraform/main.tf](/Users/annagrigoreva/Documents/Codex/2026-04-17-go-terraform/infra/terraform/main.tf)
-- [docker-compose.yml](/Users/annagrigoreva/Documents/Codex/2026-04-17-go-terraform/docker-compose.yml)
+- `docker-compose.keycloak.yml` поднимает отдельный `Keycloak + PostgreSQL`
+- `docker-compose.yml` поднимает приложение:
+  - `backend` слушает только внутри docker-сети
+  - `oauth2-proxy` публикуется наружу на `http://localhost:8080`
+  - все запросы в приложение проходят через `oauth2-proxy`
+- `oauth2-proxy` ходит в Keycloak по issuer `http://host.docker.internal:8081/realms/plants`
 
-## Что уже реализовано
+## Что меняется по сравнению с прямым OIDC во frontend
 
-### Бекенд
-
-- каталог растений: создание, обновление, удаление, получение списка
-- загрузка фотографий в файловую систему и возврат ссылок для фронтенда
-- календарные события ухода с несколькими действиями и несколькими растениями
-- файловое JSON-хранилище для локального запуска без внешней БД приложения
-- обязательная проверка JWT access token от Keycloak по JWKS
-
-### Фронтенд
-
-- автоматический логин через Keycloak
-- карточки растений с фотопленкой
-- форма добавления событий в календарь с мультивыбором действий и растений
-- помесячный календарь ухода
-
-### Инфраструктура
-
-- Docker Compose для локального Keycloak + PostgreSQL
-- Terraform для создания realm `plants`, роли `app-user` и клиента `plant-keeper-web`
+- frontend больше не обменивает `code` на токены сам
+- браузер работает с приложением через cookie-сессию `oauth2-proxy`
+- backend доверяет identity headers от `oauth2-proxy`
+- Keycloak-клиент теперь `CONFIDENTIAL`, а не public SPA client
 
 ## Локальный запуск
 
-### 1. Поднять Keycloak
+### 1. Поднять отдельный Keycloak
 
-```bash
-cd /Users/annagrigoreva/Documents/Codex/2026-04-17-go-terraform
-docker compose up -d
+```powershell
+docker compose -f docker-compose.keycloak.yml up -d
 ```
 
-Keycloak будет доступен по адресу [http://localhost:8081](http://localhost:8081).
+Keycloak будет доступен на `http://localhost:8081`.
 
-### 2. Применить Terraform
+### 2. Настроить Keycloak через Terraform
 
-На текущей машине `terraform` не установлен, поэтому сначала нужен Terraform CLI.
-
-```bash
-cd /Users/annagrigoreva/Documents/Codex/2026-04-17-go-terraform/infra/terraform
-cp terraform.tfvars.example terraform.tfvars
+```powershell
+cd infra/terraform
 terraform init
 terraform apply
 ```
 
-После `apply` Terraform создаст realm и клиент для приложения.
+Terraform создаст:
 
-### 3. Настроить бекенд
+- realm `plants`
+- роль `app-user`
+- confidential client `plant-keeper-proxy`
 
-```bash
-cd /Users/annagrigoreva/Documents/Codex/2026-04-17-go-terraform/backend
-cp .env.example .env
-set -a
-source .env
-set +a
-go run .
+Для локального dev-сценария client secret по умолчанию:
+
+```text
+dev-oauth2-proxy-secret
 ```
 
-Приложение будет доступно по адресу [http://localhost:8080](http://localhost:8080).
+### 3. Поднять приложение с sidecar proxy
 
-## Как работает авторизация
+```powershell
+cd ..
+docker compose up --build -d
+```
 
-- фронтенд начинает OIDC Authorization Code Flow с PKCE
-- Keycloak возвращает `code`
-- фронтенд обменивает `code` на токены через `token endpoint`
-- Go-бекенд принимает `Bearer` access token и валидирует подпись через JWKS Keycloak
-- без токена API не отвечает
+После этого приложение будет открываться на `http://localhost:8080`.
 
-## Ограничения текущего стартового проекта
+## Compose-файлы
 
-- приложение хранит данные в JSON-файле, а не в PostgreSQL или SQLite
-- календарные события пока можно создавать через форму, но отдельный UI для редактирования событий еще не добавлен
-- для Terraform я подготовил конфиг, но не смог локально выполнить `terraform init/apply`, потому что CLI отсутствует
+- [docker-compose.keycloak.yml](./docker-compose.keycloak.yml): отдельный Keycloak и PostgreSQL
+- [docker-compose.yml](./docker-compose.yml): backend и `oauth2-proxy`
+- [oauth2-proxy/oauth2-proxy.cfg](./oauth2-proxy/oauth2-proxy.cfg): конфиг `oauth2-proxy` с комментариями по каждой настройке
+- [keycloak/themes/plantkeeper/login/theme.properties](./keycloak/themes/plantkeeper/login/theme.properties): тема авторизации Keycloak
+- [keycloak/themes/plantkeeper/login/resources/css/styles.css](./keycloak/themes/plantkeeper/login/resources/css/styles.css): кастомный стиль экрана логина
+
+## Основные переменные
+
+В backend:
+
+- `AUTH_MODE=oauth2-proxy`
+- `OAUTH2_PROXY_SIGN_IN_URL=/oauth2/sign_in`
+- `OAUTH2_PROXY_SIGN_OUT_URL=/oauth2/sign_out?rd=%2F`
+
+В Terraform:
+
+- `frontend_base_url = "http://localhost:8080"`
+- `oauth2_proxy_client_id = "plant-keeper-proxy"`
+- `oauth2_proxy_client_secret = "dev-oauth2-proxy-secret"`
+
+## Если нужно вернуться к прямой JWT-проверке
+
+Backend все еще поддерживает старый режим:
+
+```env
+AUTH_MODE=jwt
+KEYCLOAK_ISSUER_URL=http://localhost:8081/realms/plants
+KEYCLOAK_CLIENT_ID=plant-keeper-proxy
+```
+
+Но в текущей локальной схеме основным считается режим через `oauth2-proxy`.
